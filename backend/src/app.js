@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require(path.join(__dirname, '../../swagger/swagger.json'));
+const swaggerDocument = require(path.join(__dirname, '../swagger/swagger.json'));
 const { config } = require('./config/env');
 const { errorHandler } = require('./middleware/errorHandler');
 const authRouter = require('./routes/auth.route');
@@ -38,4 +38,4 @@ app.use('/api/todos', todoRouter);
 
 app.use(errorHandler);
 
-module.exports = { app };
+module.exports = app;

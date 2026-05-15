@@ -2,7 +2,7 @@ require('dotenv/config');
 const { config } = require('./config/env');
 const { closePool } = require('./db/pool');
 const { checkDatabaseConnection, runMigrations } = require('./db/utils');
-const { app } = require('./app');
+const app = require('./app');
 
 async function start() {
   const connected = await checkDatabaseConnection();

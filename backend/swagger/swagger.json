@@ -1,0 +1,2433 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TodoListApp API",
+    "version": "1.0.0",
+    "description": "TodoListApp REST API — JWT 기반 인증, 카테고리 관리, 할일 CRUD를 제공하는 개인 할일 관리 서비스 API.\n\n## 인증 방식\n- **Access Token**: `Authorization: Bearer <token>` 헤더로 전달 (유효기간 15분)\n- **Refresh Token**: HttpOnly Cookie로만 전달 — 요청/응답 body에 포함되지 않음\n\n## 공통 응답 구조\n\n**성공**\n```json\n{ \"success\": true, \"data\": { ... } }\n```\n\n**실패**\n```json\n{ \"success\": false, \"error\": { \"code\": \"ERROR_CODE\", \"message\": \"에러 설명\" } }\n```",
+    "contact": {
+      "name": "MinYoung"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "개발 서버"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "인증 관련 API — 회원가입, 로그인, 로그아웃, 토큰 재발급"
+    },
+    {
+      "name": "Users",
+      "description": "사용자 관련 API — 내 정보 조회, 수정, 회원탈퇴"
+    },
+    {
+      "name": "Categories",
+      "description": "카테고리 관련 API — 목록 조회, 생성, 삭제"
+    },
+    {
+      "name": "Todos",
+      "description": "할일 관련 API — 목록 조회, 생성, 상세 조회, 수정, 삭제"
+    }
+  ],
+  "paths": {
+    "/api/auth/signup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "회원가입",
+        "description": "이메일, 비밀번호, 이름으로 신규 계정을 생성합니다.\n\n**비즈니스 규칙**\n- BR-01: 이메일은 시스템 전체에서 고유해야 합니다.\n- NFR-03: 비밀번호는 최소 8자 이상이어야 합니다.\n- NFR-03: 분당 10회 초과 시 Rate Limiting이 적용됩니다.",
+        "operationId": "signup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              },
+              "example": {
+                "email": "minkim@example.com",
+                "password": "Planning123",
+                "name": "김민영"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "회원가입 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "email": "minkim@example.com",
+                    "name": "김민영",
+                    "auth_provider": "local",
+                    "created_at": "2026-05-13T10:00:00.000Z",
+                    "updated_at": "2026-05-13T10:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류 (이메일 형식 오류, 비밀번호 8자 미만 등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "비밀번호는 최소 8자 이상이어야 합니다."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이메일 중복 (BR-01)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "EMAIL_ALREADY_EXISTS",
+                    "message": "이미 사용 중인 이메일입니다."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate Limit 초과 — 분당 10회 이상 시도 (NFR-03)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "RATE_LIMIT_EXCEEDED",
+                    "message": "잠시 후 다시 시도해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "로그인",
+        "description": "이메일과 비밀번호로 인증하여 Access Token과 Refresh Token을 발급합니다.\n\n- Access Token은 응답 body에 포함됩니다 (유효기간 15분).\n- Refresh Token은 HttpOnly Cookie로 설정됩니다 (유효기간 7일).\n- NFR-03: 분당 10회 초과 시 Rate Limiting이 적용됩니다.",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "email": "minkim@example.com",
+                "password": "Planning123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "로그인 성공 — Access Token 반환, Refresh Token은 HttpOnly Cookie로 설정",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Refresh Token — HttpOnly; Secure; SameSite=Strict",
+                "schema": {
+                  "type": "string",
+                  "example": "refreshToken=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=604800"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LoginResponse"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "user": {
+                      "id": "550e8400-e29b-41d4-a716-446655440000",
+                      "email": "minkim@example.com",
+                      "name": "김민영",
+                      "auth_provider": "local",
+                      "created_at": "2026-05-13T10:00:00.000Z",
+                      "updated_at": "2026-05-13T10:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "이메일 또는 비밀번호를 입력해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패 — 이메일 또는 비밀번호 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INVALID_CREDENTIALS",
+                    "message": "이메일 또는 비밀번호가 올바르지 않습니다."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate Limit 초과 — 분당 10회 이상 시도 (NFR-03)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "RATE_LIMIT_EXCEEDED",
+                    "message": "잠시 후 다시 시도해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "로그아웃",
+        "description": "현재 로그인된 사용자의 Refresh Token을 서버 DB에서 즉시 무효화하고 Cookie를 삭제합니다.\n\n- 서버 DB의 `refresh_tokens` 레코드를 삭제합니다.\n- 클라이언트는 메모리의 Access Token을 초기화해야 합니다.\n- HttpOnly Cookie의 Refresh Token이 만료(삭제)됩니다.",
+        "operationId": "logout",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "로그아웃 성공 — Refresh Token Cookie 삭제",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Refresh Token Cookie 삭제 (Max-Age=0)",
+                "schema": {
+                  "type": "string",
+                  "example": "refreshToken=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=0"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "example": null
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패 — Access Token 없음 또는 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Access Token 재발급",
+        "description": "HttpOnly Cookie의 Refresh Token을 사용하여 새로운 Access Token을 발급합니다.\n\n- 요청 body는 필요 없습니다. Refresh Token은 Cookie로 자동 전송됩니다.\n- Token Rotation 적용: 재발급 시 기존 Refresh Token은 즉시 폐기되고 새 Refresh Token이 발급됩니다.\n- 만료된 Refresh Token으로 재발급 시도 시 해당 사용자의 모든 Refresh Token이 일괄 폐기됩니다.",
+        "operationId": "refresh",
+        "responses": {
+          "200": {
+            "description": "토큰 재발급 성공 — 새 Access Token 반환, 새 Refresh Token은 HttpOnly Cookie로 설정",
+            "headers": {
+              "Set-Cookie": {
+                "description": "새 Refresh Token — HttpOnly; Secure; SameSite=Strict (Token Rotation)",
+                "schema": {
+                  "type": "string",
+                  "example": "refreshToken=<newToken>; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=604800"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RefreshResponse"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh Token 만료 또는 유효하지 않음 — 재로그인 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "REFRESH_TOKEN_EXPIRED",
+                    "message": "Refresh Token이 만료되었습니다. 다시 로그인해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "내 정보 조회",
+        "description": "현재 로그인된 사용자의 프로필 정보를 반환합니다.\n\n- NFR-06: 본인 정보만 조회 가능합니다.",
+        "operationId": "getMe",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "내 정보 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "email": "minkim@example.com",
+                    "name": "김민영",
+                    "auth_provider": "local",
+                    "created_at": "2026-05-13T10:00:00.000Z",
+                    "updated_at": "2026-05-13T10:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Users"],
+        "summary": "내 정보 수정",
+        "description": "현재 로그인된 사용자의 이름 또는 비밀번호를 수정합니다.\n\n- 이름만 변경하거나 비밀번호만 변경하거나 둘 다 변경할 수 있습니다.\n- 비밀번호 변경 시 `currentPassword`와 `newPassword` 모두 필요합니다.\n- `updated_at` 타임스탬프가 UTC 기준으로 갱신됩니다.",
+        "operationId": "updateMe",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              },
+              "examples": {
+                "name_only": {
+                  "summary": "이름만 변경",
+                  "value": {
+                    "name": "박민영"
+                  }
+                },
+                "password_only": {
+                  "summary": "비밀번호만 변경",
+                  "value": {
+                    "currentPassword": "Planning123",
+                    "newPassword": "NewPlan456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "내 정보 수정 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "email": "minkim@example.com",
+                    "name": "박민영",
+                    "auth_provider": "local",
+                    "created_at": "2026-05-13T10:00:00.000Z",
+                    "updated_at": "2026-05-13T11:30:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류 (새 비밀번호 8자 미만 등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "새 비밀번호는 최소 8자 이상이어야 합니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패 또는 현재 비밀번호 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  },
+                  "invalid_credentials": {
+                    "summary": "현재 비밀번호 불일치",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_CREDENTIALS",
+                        "message": "현재 비밀번호가 올바르지 않습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "회원 탈퇴",
+        "description": "현재 로그인된 사용자의 계정과 모든 데이터를 단일 트랜잭션으로 완전 삭제합니다.\n\n- 비밀번호 확인 후 탈퇴를 진행합니다.\n- NFR-04: 단일 DB 트랜잭션으로 다음 순서대로 원자적 삭제:\n  1. `refresh_tokens` — 사용자의 모든 Refresh Token 삭제\n  2. `todos` — 사용자의 모든 할일 삭제\n  3. `categories` — 사용자 소유의 모든 카테고리 삭제\n  4. `users` — 사용자 계정 레코드 삭제\n- 실패 시 전체 롤백됩니다.",
+        "operationId": "deleteMe",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "description": "본인 확인을 위한 현재 비밀번호",
+                    "example": "Planning123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "회원 탈퇴 성공 — 모든 데이터 삭제 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "example": null
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류 (비밀번호 미입력 등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "비밀번호를 입력해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패 또는 비밀번호 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  },
+                  "invalid_credentials": {
+                    "summary": "비밀번호 불일치",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_CREDENTIALS",
+                        "message": "비밀번호가 올바르지 않습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류 (트랜잭션 실패 시 전체 롤백)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "탈퇴 처리 중 오류가 발생했습니다. 다시 시도해 주세요."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "카테고리 목록 조회",
+        "description": "현재 로그인된 사용자의 카테고리 목록을 반환합니다.\n\n- 시스템 기본 카테고리(`is_default=true`)와 사용자 소유 카테고리를 모두 포함합니다.\n- BR-03: 본인 소유 카테고리만 조회됩니다.",
+        "operationId": "getCategories",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "카테고리 목록 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Category"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+                      "user_id": null,
+                      "name": "일반",
+                      "is_default": true,
+                      "created_at": "2026-01-01T00:00:00.000Z"
+                    },
+                    {
+                      "id": "bbbbbbbb-0000-0000-0000-000000000002",
+                      "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "name": "업무",
+                      "is_default": false,
+                      "created_at": "2026-05-13T10:30:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "카테고리 생성",
+        "description": "현재 로그인된 사용자의 새 카테고리를 생성합니다.\n\n- 동일 사용자 내 카테고리명 중복은 허용되지 않습니다.\n- 기본 카테고리명(예: '일반')과 동일한 이름은 사용할 수 없습니다.\n- BR-06: `is_default=true`로 생성할 수 없습니다.",
+        "operationId": "createCategory",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCategoryRequest"
+              },
+              "example": {
+                "name": "사이드프로젝트"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "카테고리 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Category"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "cccccccc-0000-0000-0000-000000000003",
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "name": "사이드프로젝트",
+                    "is_default": false,
+                    "created_at": "2026-05-13T12:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류 (이름 미입력, 100자 초과 등)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "카테고리명을 입력해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "카테고리명 중복 (동일 사용자 내)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "이미 존재하는 카테고리명입니다."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/categories/{id}": {
+      "delete": {
+        "tags": ["Categories"],
+        "summary": "카테고리 삭제",
+        "description": "지정된 카테고리를 삭제합니다.\n\n- BR-06: `is_default=true`인 기본 카테고리는 삭제할 수 없습니다 (403 반환).\n- BR-07: 삭제 전 해당 카테고리에 속한 모든 할일을 기본 카테고리('일반')로 자동 재배정합니다.\n- NFR-04: 할일 재배정과 카테고리 삭제는 단일 DB 트랜잭션으로 원자적으로 처리됩니다. 실패 시 전체 롤백됩니다.\n- BR-03: 본인 소유 카테고리만 삭제할 수 있습니다.",
+        "operationId": "deleteCategory",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "삭제할 카테고리의 UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "bbbbbbbb-0000-0000-0000-000000000002"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "카테고리 삭제 성공 — 소속 할일은 기본 카테고리로 재배정됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "example": null
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 거부 — 타인 소유 카테고리 또는 기본 카테고리 삭제 시도",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "타인 소유 카테고리",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "FORBIDDEN",
+                        "message": "접근 권한이 없습니다."
+                      }
+                    }
+                  },
+                  "default_category": {
+                    "summary": "기본 카테고리 삭제 시도 (BR-06)",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "DEFAULT_CATEGORY",
+                        "message": "기본 카테고리는 삭제할 수 없습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "카테고리를 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "카테고리를 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류 (트랜잭션 실패 시 전체 롤백)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "카테고리 삭제 중 오류가 발생했습니다. 다시 시도해 주세요."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/todos": {
+      "get": {
+        "tags": ["Todos"],
+        "summary": "할일 목록 조회",
+        "description": "현재 로그인된 사용자의 할일 목록을 반환합니다.\n\n- BR-08: `categoryId`, `isCompleted`, `overdue` 쿼리 파라미터로 필터링할 수 있습니다.\n- `overdue` 필터는 서버에서 `due_date < NOW()` 조건으로 처리하지만, 클라이언트 로컬 타임존 기준 Overdue 표시는 클라이언트에서 수행합니다.\n- NFR-01: 응답 시간 95th percentile ≤ 500ms.",
+        "operationId": "getTodos",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "query",
+            "required": false,
+            "description": "필터링할 카테고리 UUID (BR-08)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "bbbbbbbb-0000-0000-0000-000000000002"
+          },
+          {
+            "name": "isCompleted",
+            "in": "query",
+            "required": false,
+            "description": "완료 여부 필터 (BR-08) — true: 완료된 항목만, false: 미완료 항목만",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": false
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "required": false,
+            "description": "기간 만료 여부 필터 (BR-08) — true: due_date가 현재 날짜 이전인 항목만",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "할일 목록 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Todo"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": "dddddddd-0000-0000-0000-000000000004",
+                      "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "category_id": "bbbbbbbb-0000-0000-0000-000000000002",
+                      "title": "디자인 시안 v1 제출",
+                      "description": "클라이언트 피드백 반영본 포함",
+                      "start_date": "2026-05-13",
+                      "due_date": "2026-05-14",
+                      "is_completed": false,
+                      "created_at": "2026-05-13T09:00:00.000Z",
+                      "updated_at": "2026-05-13T09:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "쿼리 파라미터 유효성 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "categoryId는 유효한 UUID 형식이어야 합니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Todos"],
+        "summary": "할일 생성",
+        "description": "새 할일을 생성합니다.\n\n- BR-04: `categoryId`는 필수이며, 기본 카테고리 또는 본인 소유 카테고리만 사용할 수 있습니다.\n- BR-05: `due_date`가 지정된 경우 `start_date` 이상이어야 합니다.\n- `is_completed`는 항상 `false`로 초기화됩니다.",
+        "operationId": "createTodo",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTodoRequest"
+              },
+              "example": {
+                "categoryId": "bbbbbbbb-0000-0000-0000-000000000002",
+                "title": "디자인 시안 v1 제출",
+                "description": "클라이언트 피드백 반영본 포함",
+                "start_date": "2026-05-13",
+                "due_date": "2026-05-14"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "할일 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Todo"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "dddddddd-0000-0000-0000-000000000004",
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "category_id": "bbbbbbbb-0000-0000-0000-000000000002",
+                    "title": "디자인 시안 v1 제출",
+                    "description": "클라이언트 피드백 반영본 포함",
+                    "start_date": "2026-05-13",
+                    "due_date": "2026-05-14",
+                    "is_completed": false,
+                    "created_at": "2026-05-13T09:00:00.000Z",
+                    "updated_at": "2026-05-13T09:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류 — 제목 미입력, 카테고리 미선택, 날짜 범위 오류, 카테고리 접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "title_required": {
+                    "summary": "제목 미입력",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "제목을 입력해 주세요."
+                      }
+                    }
+                  },
+                  "category_required": {
+                    "summary": "카테고리 미선택 (BR-04)",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "카테고리를 선택해 주세요."
+                      }
+                    }
+                  },
+                  "invalid_category": {
+                    "summary": "본인 소유가 아닌 카테고리 (BR-04)",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "유효하지 않은 카테고리입니다."
+                      }
+                    }
+                  },
+                  "invalid_date_range": {
+                    "summary": "날짜 범위 오류 (BR-05)",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "종료예정일은 시작일과 같거나 이후 날짜여야 합니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/todos/{id}": {
+      "get": {
+        "tags": ["Todos"],
+        "summary": "할일 상세 조회",
+        "description": "지정된 할일의 상세 정보를 반환합니다.\n\n- BR-03: 본인 소유 할일만 조회할 수 있습니다.",
+        "operationId": "getTodoById",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "조회할 할일의 UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "dddddddd-0000-0000-0000-000000000004"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "할일 상세 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Todo"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "dddddddd-0000-0000-0000-000000000004",
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "category_id": "bbbbbbbb-0000-0000-0000-000000000002",
+                    "title": "디자인 시안 v1 제출",
+                    "description": "클라이언트 피드백 반영본 포함",
+                    "start_date": "2026-05-13",
+                    "due_date": "2026-05-14",
+                    "is_completed": false,
+                    "created_at": "2026-05-13T09:00:00.000Z",
+                    "updated_at": "2026-05-13T09:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 거부 — 타인 소유 할일 (BR-03)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "접근 권한이 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "할일을 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "할일을 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Todos"],
+        "summary": "할일 수정",
+        "description": "지정된 할일을 부분 수정합니다 (Partial Update).\n\n- BR-03: 본인 소유 할일만 수정할 수 있습니다.\n- BR-04: `categoryId` 변경 시 기본 카테고리 또는 본인 소유 카테고리만 선택할 수 있습니다.\n- BR-05: `due_date`가 지정된 경우 `start_date` 이상이어야 합니다.\n- UC-06 (완료 토글): `is_completed`만 변경하여 완료 상태를 토글할 수 있습니다.\n- `updated_at` 타임스탬프가 UTC 기준으로 갱신됩니다.",
+        "operationId": "updateTodo",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "수정할 할일의 UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "dddddddd-0000-0000-0000-000000000004"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTodoRequest"
+              },
+              "examples": {
+                "update_due_date": {
+                  "summary": "종료예정일 변경",
+                  "value": {
+                    "due_date": "2026-05-15"
+                  }
+                },
+                "toggle_complete": {
+                  "summary": "완료 처리 토글 (UC-06)",
+                  "value": {
+                    "is_completed": true
+                  }
+                },
+                "update_category": {
+                  "summary": "카테고리 변경",
+                  "value": {
+                    "categoryId": "cccccccc-0000-0000-0000-000000000003"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "할일 수정 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Todo"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "dddddddd-0000-0000-0000-000000000004",
+                    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "category_id": "bbbbbbbb-0000-0000-0000-000000000002",
+                    "title": "디자인 시안 v1 제출",
+                    "description": "클라이언트 피드백 반영본 포함",
+                    "start_date": "2026-05-13",
+                    "due_date": "2026-05-15",
+                    "is_completed": false,
+                    "created_at": "2026-05-13T09:00:00.000Z",
+                    "updated_at": "2026-05-13T14:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 유효성 오류 — 날짜 범위 오류, 카테고리 접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_date_range": {
+                    "summary": "날짜 범위 오류 (BR-05)",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "종료예정일은 시작일과 같거나 이후 날짜여야 합니다."
+                      }
+                    }
+                  },
+                  "invalid_category": {
+                    "summary": "본인 소유가 아닌 카테고리 (BR-04)",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "유효하지 않은 카테고리입니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 거부 — 타인 소유 할일 (BR-03)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "접근 권한이 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "할일을 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "할일을 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Todos"],
+        "summary": "할일 삭제",
+        "description": "지정된 할일을 영구 삭제합니다.\n\n- BR-03: 본인 소유 할일만 삭제할 수 있습니다.\n- 삭제 전 클라이언트 측에서 확인 단계를 거쳐야 합니다 (UC-07).",
+        "operationId": "deleteTodo",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "삭제할 할일의 UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "dddddddd-0000-0000-0000-000000000004"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "할일 삭제 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "example": null
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "토큰 없음",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "인증이 필요합니다."
+                      }
+                    }
+                  },
+                  "token_expired": {
+                    "summary": "토큰 만료",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Access Token이 만료되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 거부 — 타인 소유 할일 (BR-03)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "접근 권한이 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "할일을 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "할일을 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 오류가 발생했습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Access Token (유효기간 15분). 로그인 후 발급된 accessToken을 사용하세요.\n\n형식: `Authorization: Bearer <accessToken>`"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "description": "사용자 엔티티 — `password_hash`와 `provider_id`는 응답에서 제외됩니다.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "사용자 고유 ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true,
+            "description": "이메일 주소 — OAuth 전용 계정은 null일 수 있음",
+            "example": "minkim@example.com"
+          },
+          "name": {
+            "type": "string",
+            "description": "사용자 이름",
+            "example": "김민영"
+          },
+          "auth_provider": {
+            "type": "string",
+            "enum": ["local", "google", "facebook"],
+            "description": "인증 제공자",
+            "example": "local"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "계정 생성 일시 (UTC, ISO 8601)",
+            "example": "2026-05-13T10:00:00.000Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "계정 최종 수정 일시 (UTC, ISO 8601)",
+            "example": "2026-05-13T10:00:00.000Z"
+          }
+        },
+        "required": ["id", "name", "auth_provider", "created_at", "updated_at"]
+      },
+      "Category": {
+        "type": "object",
+        "description": "카테고리 엔티티 — `user_id=null`이면 시스템 기본 카테고리",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "카테고리 고유 ID",
+            "example": "bbbbbbbb-0000-0000-0000-000000000002"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "소유자 사용자 ID — null이면 시스템 기본 카테고리 (BR-06, BR-07)",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "description": "카테고리명",
+            "maxLength": 100,
+            "example": "업무"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "기본 카테고리 여부 — true이면 삭제/수정 불가 (BR-06)",
+            "example": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "카테고리 생성 일시 (UTC, ISO 8601)",
+            "example": "2026-05-13T10:30:00.000Z"
+          }
+        },
+        "required": ["id", "name", "is_default", "created_at"]
+      },
+      "Todo": {
+        "type": "object",
+        "description": "할일 엔티티",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "할일 고유 ID",
+            "example": "dddddddd-0000-0000-0000-000000000004"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "소유자 사용자 ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "소속 카테고리 ID",
+            "example": "bbbbbbbb-0000-0000-0000-000000000002"
+          },
+          "title": {
+            "type": "string",
+            "description": "할일 제목",
+            "maxLength": 255,
+            "example": "디자인 시안 v1 제출"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "할일 상세 설명 (선택)",
+            "example": "클라이언트 피드백 반영본 포함"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "시작일 (ISO 8601 date, UTC 기준 저장)",
+            "example": "2026-05-13"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "종료예정일 (ISO 8601 date, UTC 기준 저장) — start_date 이상이어야 함 (BR-05)",
+            "example": "2026-05-14"
+          },
+          "is_completed": {
+            "type": "boolean",
+            "description": "완료 여부 — 기본값: false",
+            "example": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "할일 생성 일시 (UTC, ISO 8601)",
+            "example": "2026-05-13T09:00:00.000Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "할일 최종 수정 일시 (UTC, ISO 8601)",
+            "example": "2026-05-13T09:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "category_id",
+          "title",
+          "is_completed",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "SignupRequest": {
+        "type": "object",
+        "description": "회원가입 요청 본문",
+        "required": ["email", "password", "name"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "회원가입에 사용할 이메일 주소 (시스템 전체 고유, BR-01)",
+            "example": "minkim@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "비밀번호 — 최소 8자 이상 (NFR-03)",
+            "example": "Planning123"
+          },
+          "name": {
+            "type": "string",
+            "description": "사용자 이름",
+            "example": "김민영"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "로그인 요청 본문",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "등록된 이메일 주소",
+            "example": "minkim@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "비밀번호",
+            "example": "Planning123"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "description": "로그인 성공 응답 data — Refresh Token은 HttpOnly Cookie로 별도 전달",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT Access Token (유효기간 15분) — 클라이언트 메모리에 저장",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": ["accessToken", "user"]
+      },
+      "RefreshResponse": {
+        "type": "object",
+        "description": "토큰 재발급 성공 응답 data — 새 Refresh Token은 HttpOnly Cookie로 별도 전달",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "새로 발급된 JWT Access Token (유효기간 15분)",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          }
+        },
+        "required": ["accessToken"]
+      },
+      "CreateCategoryRequest": {
+        "type": "object",
+        "description": "카테고리 생성 요청 본문",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "카테고리명 — 동일 사용자 내 중복 불가, 기본 카테고리명 사용 불가",
+            "example": "사이드프로젝트"
+          }
+        }
+      },
+      "CreateTodoRequest": {
+        "type": "object",
+        "description": "할일 생성 요청 본문",
+        "required": ["categoryId", "title"],
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "카테고리 ID — 기본 카테고리 또는 본인 소유 카테고리만 허용 (BR-04)",
+            "example": "bbbbbbbb-0000-0000-0000-000000000002"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "할일 제목",
+            "example": "디자인 시안 v1 제출"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "할일 상세 설명 (선택)",
+            "example": "클라이언트 피드백 반영본 포함"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "시작일 (ISO 8601 date 형식, 선택)",
+            "example": "2026-05-13"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "종료예정일 (ISO 8601 date 형식, 선택) — start_date 이상이어야 함 (BR-05)",
+            "example": "2026-05-14"
+          }
+        }
+      },
+      "UpdateTodoRequest": {
+        "type": "object",
+        "description": "할일 수정 요청 본문 (Partial Update) — 모든 필드가 선택 사항",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "카테고리 ID — 기본 카테고리 또는 본인 소유 카테고리만 허용 (BR-04)",
+            "example": "cccccccc-0000-0000-0000-000000000003"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "할일 제목",
+            "example": "디자인 시안 v2 제출"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "할일 상세 설명",
+            "example": "최종 수정본 반영"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "시작일 (ISO 8601 date 형식)",
+            "example": "2026-05-13"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "종료예정일 (ISO 8601 date 형식) — start_date 이상이어야 함 (BR-05)",
+            "example": "2026-05-15"
+          },
+          "is_completed": {
+            "type": "boolean",
+            "description": "완료 여부 — true/false 토글로 완료 상태를 변경 (UC-06)",
+            "example": true
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "description": "내 정보 수정 요청 본문 — 모든 필드가 선택 사항. 비밀번호 변경 시 currentPassword와 newPassword 모두 필요.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "변경할 이름",
+            "example": "박민영"
+          },
+          "currentPassword": {
+            "type": "string",
+            "description": "현재 비밀번호 — 비밀번호 변경 시 필수",
+            "example": "Planning123"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "description": "새 비밀번호 — 최소 8자 이상 (NFR-03)",
+            "example": "NewPlan456"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "공통 오류 응답 구조",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false],
+            "description": "항상 false",
+            "example": false
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "에러 코드 — VALIDATION_ERROR | UNAUTHORIZED | TOKEN_EXPIRED | REFRESH_TOKEN_EXPIRED | INVALID_CREDENTIALS | FORBIDDEN | DEFAULT_CATEGORY | NOT_FOUND | EMAIL_ALREADY_EXISTS | RATE_LIMIT_EXCEEDED | INTERNAL_SERVER_ERROR",
+                "enum": [
+                  "VALIDATION_ERROR",
+                  "UNAUTHORIZED",
+                  "TOKEN_EXPIRED",
+                  "REFRESH_TOKEN_EXPIRED",
+                  "INVALID_CREDENTIALS",
+                  "FORBIDDEN",
+                  "DEFAULT_CATEGORY",
+                  "NOT_FOUND",
+                  "EMAIL_ALREADY_EXISTS",
+                  "RATE_LIMIT_EXCEEDED",
+                  "INTERNAL_SERVER_ERROR"
+                ],
+                "example": "VALIDATION_ERROR"
+              },
+              "message": {
+                "type": "string",
+                "description": "사람이 읽을 수 있는 에러 설명",
+                "example": "입력값이 올바르지 않습니다."
+              }
+            },
+            "required": ["code", "message"]
+          }
+        },
+        "required": ["success", "error"]
+      }
+    }
+  }
+}
