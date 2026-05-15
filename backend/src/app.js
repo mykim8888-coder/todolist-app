@@ -25,6 +25,10 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/', (_req, res) => {
+  res.json({ name: 'TodoListApp API', version: '1.0.0', status: 'ok' });
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
