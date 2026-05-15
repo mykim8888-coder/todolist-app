@@ -29,7 +29,7 @@ TodoListApp은 **레이어드 아키텍처(Layered Architecture)** 를 기반으
 - **관심사 분리(Separation of Concerns)**: 하나의 파일 또는 모듈은 하나의 책임만 가진다. 비즈니스 로직은 HTTP 처리나 DB 쿼리 코드와 섞이지 않는다.
 - **프론트엔드-백엔드 완전 분리**: SPA(React 19)와 REST API(Node.js + Express)는 독립된 프로세스로 동작하며, HTTP를 통해서만 통신한다. 백엔드는 HTML을 렌더링하지 않고, 프론트엔드는 DB에 직접 접근하지 않는다.
 - **단방향 의존성**: 상위 레이어는 하위 레이어에만 의존한다. 하위 레이어가 상위 레이어를 역참조하는 것은 금지된다.
-- **명시적 인터페이스**: 레이어 간 데이터 교환은 명시적으로 정의된 타입(TypeScript interface 또는 DTO)을 통해 이루어진다. 암묵적인 `any` 타입 전달은 금지된다.
+- **명시적 인터페이스**: 레이어 간 데이터 교환은 명시적으로 정의된 구조(프론트엔드는 TypeScript interface, 백엔드는 JSDoc 또는 네이밍 규약)를 통해 이루어진다.
 
 ### 1.2 Bounded Context 경계 준수
 
@@ -76,8 +76,8 @@ Page → Feature Component → UI Component
 - **허용**: `express.Router`, 미들웨어 함수 연결, Controller 함수 참조.
 - **금지**: 비즈니스 로직 작성, DB 직접 접근, Service/Repository 직접 import.
 - **예시**:
-  ```typescript
-  // src/routes/todos.route.ts
+  ```js
+  // src/routes/todos.route.js
   router.get('/', authenticate, todoController.getList);
   router.post('/', authenticate, validate(createTodoSchema), todoController.create);
   ```
@@ -87,12 +87,12 @@ Page → Feature Component → UI Component
 - **허용**: `req` 파싱(params, query, body, `req.user`), Service 호출, 응답 직렬화, 에러를 `next(err)`로 전달.
 - **금지**: 비즈니스 로직 작성(BR 판단), DB 쿼리 직접 실행, Repository 직접 import.
 - **예시**:
-  ```typescript
-  // src/controllers/todo.controller.ts
-  async getList(req: Request, res: Response, next: NextFunction) {
+  ```js
+  // src/controllers/todo.controller.js
+  async function getList(req, res, next) {
     try {
-      const todos = await todoService.getList(req.user.id, req.query);
-      res.json({ data: todos });
+      const todos = await todoService.getList(req.user.sub, req.query);
+      res.json({ success: true, data: todos });
     } catch (err) {
       next(err);
     }
@@ -104,21 +104,13 @@ Page → Feature Component → UI Component
 - **허용**: Repository 호출, 트랜잭션 제어(`pg` Pool의 `client.query` 직접 사용 허용), 비즈니스 예외 발생.
 - **금지**: `req`/`res` 객체 접근, 직접적인 SQL 쿼리 문자열 조합(Repository에 위임), HTTP 상태 코드 직접 사용.
 - **트랜잭션 원칙**: 카테고리 삭제(할일 재배정 포함, BR-07)와 회원 탈퇴(NFR-04)처럼 원자성이 요구되는 작업은 Service에서 `BEGIN` / `COMMIT` / `ROLLBACK` 을 직접 제어한다.
-  ```typescript
-  // src/services/category.service.ts
-  async deleteCategory(categoryId: string, userId: string) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await categoryRepository.reassignTodos(client, categoryId, defaultCategoryId);
-      await categoryRepository.delete(client, categoryId, userId);
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+  ```js
+  // src/services/category.service.js
+  async function deleteCategory(categoryId, userId) {
+    await withTransaction(async (client) => {
+      await categoryRepo.reassignTodos(client, categoryId, defaultCategoryId, userId);
+      await categoryRepo.deleteById(client, categoryId);
+    });
   }
   ```
 
@@ -134,10 +126,10 @@ Page → Feature Component → UI Component
 
 | 미들웨어 | 파일 위치 | 역할 |
 |---------|----------|------|
-| `authenticate` | `src/middlewares/authenticate.ts` | JWT Access Token 검증, `req.user` 주입 |
-| `validate` | `src/middlewares/validate.ts` | 요청 본문/파라미터 스키마 검증 |
-| `rateLimiter` | `src/middlewares/rateLimiter.ts` | 엔드포인트별 Rate Limiting |
-| `errorHandler` | `src/middlewares/errorHandler.ts` | 전역 에러 핸들러, 구조화된 에러 응답 생성 |
+| `authenticate` | `src/middleware/authenticate.js` | JWT Access Token 검증, `req.user` 주입 |
+| `validate` | `src/middleware/validate.js` | 요청 본문/파라미터 스키마 검증 |
+| `rateLimiter` | `src/middleware/rateLimiter.js` | 엔드포인트별 Rate Limiting |
+| `errorHandler` | `src/middleware/errorHandler.js` | 전역 에러 핸들러, 구조화된 에러 응답 생성 |
 
 ### 2.2 프론트엔드 레이어 정의
 
@@ -200,14 +192,10 @@ Page → Feature Component → UI Component
 
 | 대상 | 규칙 | 예시 |
 |------|------|------|
-| 파일명 | `kebab-case.{layer}.ts` | `todo.controller.ts`, `category.service.ts` |
-| 클래스명 | `PascalCase` | `TodoController`, `CategoryService` |
-| 함수/메서드명 | `camelCase`, 동사+명사 | `createTodo`, `getList`, `deleteCategory` |
+| 파일명 | `kebab-case.{layer}.js` | `todo.controller.js`, `category.service.js` |
+| 함수명 | `camelCase`, 동사+명사 | `createTodo`, `getList`, `deleteCategory` |
 | 변수/상수명 | `camelCase` | `userId`, `categoryId`, `accessToken` |
 | 환경변수 | `SCREAMING_SNAKE_CASE` | `DATABASE_URL`, `JWT_ACCESS_SECRET` |
-| 타입/인터페이스 | `PascalCase`, 접두사 없음 | `CreateTodoDto`, `TodoResponse`, `JwtPayload` |
-| DTO (입력) | `{Action}{Entity}Dto` | `CreateTodoDto`, `UpdateUserDto` |
-| Response 타입 | `{Entity}Response` | `TodoResponse`, `CategoryResponse` |
 | 에러 클래스 | `{Domain}Error` | `NotFoundError`, `ForbiddenError` |
 
 ### 3.3 프론트엔드 네이밍 규칙
@@ -253,8 +241,8 @@ PRD 9절에 정의된 REST API 설계 방향을 따른다.
 | 할일 | PATCH | `/api/todos/:id` | 할일 수정 |
 | 할일 | DELETE | `/api/todos/:id` | 할일 삭제 |
 
-**쿼리 파라미터 네이밍**: `snake_case` 사용.
-- 예: `GET /api/todos?category_id={uuid}&is_completed=false`
+**쿼리 파라미터 네이밍**: `camelCase` 사용.
+- 예: `GET /api/todos?categoryId={uuid}&isCompleted=false&overdue=true`
 
 ### 3.5 DB 컬럼명 규칙
 
@@ -308,13 +296,11 @@ PRD 9절에 정의된 REST API 설계 방향을 따른다.
 
 | 도구 | 대상 | 설정 파일 | 핵심 규칙 |
 |------|------|----------|---------|
-| TypeScript (strict mode) | 프론트엔드 + 백엔드 | `tsconfig.json` | `strict: true`, `noImplicitAny: true`, `strictNullChecks: true` |
-| ESLint | 프론트엔드 + 백엔드 | `.eslintrc.cjs` | `@typescript-eslint/recommended`, import 순서 규칙 |
+| TypeScript (strict mode) | 프론트엔드 | `tsconfig.json` | `strict: true`, `noImplicitAny: true`, `strictNullChecks: true` |
+| ESLint | 프론트엔드 (TS) | `.eslintrc.cjs` | `@typescript-eslint/recommended` |
+| ESLint | 백엔드 (JS) | `.eslintrc.json` | `eslint:recommended`, `no-unused-vars` |
 | Prettier | 프론트엔드 + 백엔드 | `.prettierrc` | 싱글 쿼트, 세미콜론 필수, 탭 너비 2 |
 | Husky + lint-staged | Git pre-commit | `.husky/` | 커밋 전 ESLint + Prettier 자동 검사 |
-
-- `any` 타입 사용은 원칙적으로 금지한다. 불가피한 경우 `// eslint-disable-next-line @typescript-eslint/no-explicit-any` 주석과 함께 이유를 명시한다.
-- TypeScript의 `strict` 모드에서 컴파일 오류 없이 빌드되어야 한다.
 
 ---
 
@@ -367,11 +353,11 @@ PRD 4.3 및 NFR-03을 기반으로 아래 원칙을 적용한다.
 
 PRD NFR-02(최대 300명 동시 접속)를 기반으로 아래 원칙을 적용한다.
 
-```typescript
-// src/db/pool.ts
-import { Pool } from 'pg';
+```js
+// src/db/pool.js
+const { Pool } = require('pg');
 
-export const pool = new Pool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,                   // 최대 커넥션 수 (NFR-02: 20~30 권장)
   idleTimeoutMillis: 30000,  // 유휴 커넥션 해제 시간 (NFR-02: 30초)
@@ -393,11 +379,11 @@ PRD NFR-03을 기반으로 로그인 및 회원가입 엔드포인트에 Rate Li
 - **초과 응답 형식**: 표준 에러 응답 형식을 따르며 `Retry-After` 헤더를 포함한다.
 - **구현 방식**: `express-rate-limit` 라이브러리를 Router 레벨 미들웨어로 적용.
 
-```typescript
-// src/middlewares/rateLimiter.ts
-import rateLimit from 'express-rate-limit';
+```js
+// src/middleware/rateLimiter.js
+const rateLimit = require('express-rate-limit');
 
-export const authRateLimiter = rateLimit({
+const authRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1분
   max: 10,             // 최대 10회
   standardHeaders: true,
@@ -418,9 +404,9 @@ export const authRateLimiter = rateLimit({
 - **HTTPS**: 프로덕션 환경에서는 HTTPS를 필수로 적용한다. Refresh Token 쿠키의 `Secure` 속성이 HTTPS에서만 전달되기 때문이다.
 - **CORS**: `cors` 미들웨어를 사용하여 허용 출처를 환경변수 `CORS_ORIGIN`으로 제한한다. 와일드카드(`*`) 허용은 금지한다.
 
-```typescript
-// src/app.ts
-import cors from 'cors';
+```js
+// src/app.js
+const cors = require('cors');
 
 app.use(cors({
   origin: process.env.CORS_ORIGIN,
@@ -437,6 +423,7 @@ app.use(cors({
 
 ```json
 {
+  "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "종료예정일은 시작일과 같거나 이후 날짜여야 합니다.",
@@ -459,14 +446,16 @@ app.use(cors({
 ```
 backend/
 ├── src/
-│   ├── app.ts                          # Express 앱 초기화, 미들웨어 등록
-│   ├── server.ts                       # HTTP 서버 시작 진입점, 환경변수 검증
+│   ├── app.js                          # Express 앱 초기화, 미들웨어 등록
+│   ├── server.js                       # HTTP 서버 시작 진입점, 환경변수 검증
 │   │
 │   ├── config/
-│   │   └── env.ts                      # 환경변수 로드 및 유효성 검증 (필수값 누락 시 프로세스 종료)
+│   │   └── env.js                      # 환경변수 로드 및 유효성 검증 (필수값 누락 시 프로세스 종료)
 │   │
 │   ├── db/
-│   │   ├── pool.ts                     # pg Pool 싱글톤 인스턴스 생성 및 export
+│   │   ├── pool.js                     # pg Pool 싱글톤 인스턴스 생성 및 export
+│   │   ├── transaction.js              # withTransaction 헬퍼 (BEGIN/COMMIT/ROLLBACK)
+│   │   ├── utils.js                    # DB 연결 확인, 마이그레이션 실행 유틸
 │   │   └── migrations/                 # DB 마이그레이션 SQL 파일 (버전 관리)
 │   │       ├── 001_create_users.sql
 │   │       ├── 002_create_refresh_tokens.sql
@@ -474,72 +463,66 @@ backend/
 │   │       ├── 004_create_todos.sql
 │   │       └── 005_seed_default_categories.sql  # 기본 카테고리 시드 데이터
 │   │
-│   ├── middlewares/
-│   │   ├── authenticate.ts             # JWT Access Token 검증, req.user 주입
-│   │   ├── validate.ts                 # 요청 본문/파라미터 스키마 검증 (Zod 사용)
-│   │   ├── rateLimiter.ts              # 인증 엔드포인트 Rate Limiting 설정
-│   │   └── errorHandler.ts             # 전역 에러 핸들러, 표준 에러 응답 생성
+│   ├── middleware/
+│   │   ├── authenticate.js             # JWT Access Token 검증, req.user 주입
+│   │   ├── validate.js                 # 요청 본문/파라미터 스키마 검증 (Zod 사용)
+│   │   ├── rateLimiter.js              # 인증 엔드포인트 Rate Limiting 설정
+│   │   └── errorHandler.js             # 전역 에러 핸들러, 표준 에러 응답 생성
 │   │
 │   ├── routes/
-│   │   ├── index.ts                    # /api 하위 라우터 통합 등록
-│   │   ├── auth.route.ts               # POST /api/auth/* 경로 정의 및 미들웨어 조립
-│   │   ├── users.route.ts              # GET|PATCH|DELETE /api/users/me 경로 정의
-│   │   ├── todos.route.ts              # GET|POST|PATCH|DELETE /api/todos/* 경로 정의
-│   │   └── categories.route.ts         # GET|POST|DELETE /api/categories/* 경로 정의
+│   │   ├── auth.route.js               # POST /api/auth/* 경로 정의 및 미들웨어 조립
+│   │   ├── user.route.js               # GET|PATCH|DELETE /api/users/me 경로 정의
+│   │   ├── todo.route.js               # GET|POST|PATCH|DELETE /api/todos/* 경로 정의
+│   │   └── category.route.js           # GET|POST|DELETE /api/categories/* 경로 정의
 │   │
 │   ├── controllers/
-│   │   ├── auth.controller.ts          # 회원가입, 로그인, 로그아웃, 토큰 재발급 요청 처리
-│   │   ├── user.controller.ts          # 내 정보 조회·수정, 회원 탈퇴 요청 처리
-│   │   ├── todo.controller.ts          # 할일 CRUD 요청 처리
-│   │   └── category.controller.ts      # 카테고리 목록 조회, 생성, 삭제 요청 처리
+│   │   ├── auth.controller.js          # 회원가입, 로그인, 로그아웃, 토큰 재발급 요청 처리
+│   │   ├── user.controller.js          # 내 정보 조회·수정, 회원 탈퇴 요청 처리
+│   │   ├── todo.controller.js          # 할일 CRUD 요청 처리
+│   │   └── category.controller.js      # 카테고리 목록 조회, 생성, 삭제 요청 처리
 │   │
 │   ├── services/
-│   │   ├── auth.service.ts             # 회원가입/로그인 비즈니스 로직, JWT 발급, Refresh Token 관리
-│   │   ├── user.service.ts             # 개인정보 수정, 비밀번호 변경, 회원 탈퇴 트랜잭션 처리
-│   │   ├── todo.service.ts             # 할일 CRUD 비즈니스 로직, BR-03~BR-05 검증
-│   │   └── category.service.ts         # 카테고리 생성·삭제 비즈니스 로직, BR-06~BR-07 트랜잭션 처리
+│   │   ├── auth.service.js             # 회원가입/로그인 비즈니스 로직, JWT 발급, Refresh Token 관리
+│   │   ├── user.service.js             # 개인정보 수정, 비밀번호 변경, 회원 탈퇴 트랜잭션 처리
+│   │   ├── todo.service.js             # 할일 CRUD 비즈니스 로직, BR-03~BR-05 검증
+│   │   └── category.service.js         # 카테고리 생성·삭제 비즈니스 로직, BR-06~BR-07 트랜잭션 처리
 │   │
 │   ├── repositories/
-│   │   ├── user.repository.ts          # users 테이블 쿼리 (이메일 중복 확인, 조회, 수정, 삭제)
-│   │   ├── refreshToken.repository.ts  # refresh_tokens 테이블 쿼리 (저장, 검증, 삭제)
-│   │   ├── todo.repository.ts          # todos 테이블 쿼리 (필터 조회, 생성, 수정, 삭제)
-│   │   └── category.repository.ts      # categories 테이블 쿼리 (목록 조회, 생성, 삭제, 할일 재배정)
+│   │   ├── user.repository.js          # users 테이블 쿼리 (이메일 중복 확인, 조회, 수정, 삭제)
+│   │   ├── refreshToken.repository.js  # refresh_tokens 테이블 쿼리 (저장, 검증, 삭제)
+│   │   ├── todo.repository.js          # todos 테이블 쿼리 (필터 조회, 생성, 수정, 삭제)
+│   │   └── category.repository.js      # categories 테이블 쿼리 (목록 조회, 생성, 삭제, 할일 재배정)
 │   │
-│   ├── types/
-│   │   ├── auth.types.ts               # JwtPayload, LoginDto, SignupDto, TokenPair 등
-│   │   ├── todo.types.ts               # Todo, CreateTodoDto, UpdateTodoDto, TodoResponse 등
-│   │   ├── category.types.ts           # Category, CreateCategoryDto, CategoryResponse 등
-│   │   ├── user.types.ts               # User, UpdateUserDto, UserResponse 등
-│   │   └── express.d.ts                # Express Request 타입 확장 (req.user 타입 선언)
+│   ├── scripts/
+│   │   └── migrate.js                  # 마이그레이션 단독 실행 스크립트
 │   │
 │   └── utils/
-│       ├── jwt.ts                      # JWT 발급, 검증 유틸 함수
-│       ├── hash.ts                     # bcrypt 해싱, 비교 유틸 함수
-│       ├── tokenHash.ts                # Refresh Token SHA-256 해싱 유틸
-│       └── errors.ts                   # 커스텀 에러 클래스 정의 (NotFoundError, ForbiddenError 등)
+│       ├── jwt.js                      # JWT 발급, 검증 유틸 함수
+│       ├── hash.js                     # bcrypt 해싱, 비교 유틸 함수
+│       ├── tokenHash.js                # Refresh Token SHA-256 해싱 유틸
+│       └── errors.js                   # 커스텀 에러 클래스 정의 (NotFoundError, ForbiddenError 등)
 │
 ├── tests/
 │   ├── unit/                           # 단위 테스트 — Service 비즈니스 로직 (DB mock)
-│   │   ├── auth.service.test.ts
-│   │   ├── todo.service.test.ts
-│   │   └── category.service.test.ts
+│   │   ├── auth.service.test.js
+│   │   ├── todo.service.test.js
+│   │   └── category.service.test.js
 │   ├── integration/                    # 통합 테스트 — 실제 PostgreSQL 연결 (mock DB 사용 금지)
-│   │   ├── auth.api.test.ts            # 인증 API 전 계층 통합 검증 (Supertest)
-│   │   ├── todo.api.test.ts            # 할일 CRUD API 통합 검증
-│   │   ├── category.api.test.ts        # 카테고리 삭제 트랜잭션 통합 검증
-│   │   └── user.api.test.ts            # 회원 탈퇴 원자적 삭제 트랜잭션 검증
+│   │   ├── auth.test.js                # 인증 API 전 계층 통합 검증 (Supertest)
+│   │   ├── todo.test.js                # 할일 CRUD API 통합 검증
+│   │   ├── category.test.js            # 카테고리 삭제 트랜잭션 통합 검증
+│   │   └── user.test.js                # 회원 탈퇴 원자적 삭제 트랜잭션 검증
 │   └── helpers/
-│       ├── dbSetup.ts                  # 테스트 DB 초기화, 시드 데이터 삽입 유틸
-│       └── authHelper.ts               # 테스트용 JWT 발급, 인증 헤더 생성 유틸
+│       ├── dbSetup.js                  # 테스트 DB 초기화, 시드 데이터 삽입 유틸
+│       └── authHelper.js               # 테스트용 JWT 발급, 인증 헤더 생성 유틸
 │
 ├── .env.example                        # 환경변수 목록 (실제 값 없음, Git 커밋 허용)
 ├── .env.development                    # 개발 환경 변수 (Git 커밋 금지)
 ├── .env.test                           # 테스트 환경 변수, 테스트 DB URL (Git 커밋 금지)
 ├── .gitignore
-├── .eslintrc.cjs
+├── .eslintrc.json
 ├── .prettierrc
-├── jest.config.ts
-├── tsconfig.json                       # strict: true 설정
+├── jest.config.js
 └── package.json
 ```
 
@@ -582,10 +565,12 @@ frontend/
 │   │   ├── Modal.tsx                   # 모달 다이얼로그 (확인, 취소 액션)
 │   │   ├── Badge.tsx                   # 상태 배지 (완료, 기간 초과 등 표시)
 │   │   ├── Spinner.tsx                 # 로딩 스피너
-│   │   ├── Toast.tsx                   # 토스트 알림 메시지
+│   │   ├── Toast.tsx                   # 개별 토스트 알림 메시지 컴포넌트
+│   │   ├── ToastContainer.tsx          # ui.store의 toastQueue 구독, Toast 목록 렌더링
 │   │   └── Layout.tsx                  # 공통 레이아웃 (헤더 네비게이션 포함)
 │   │
 │   ├── hooks/                          # TanStack Query 기반 커스텀 훅
+│   │   ├── useAuthInitializer.ts       # 앱 마운트 시 /api/users/me 호출, 인증 상태 복구
 │   │   ├── useTodos.ts                 # useQuery: 할일 목록 조회 (필터 파라미터 포함)
 │   │   ├── useCreateTodo.ts            # useMutation: 할일 생성
 │   │   ├── useUpdateTodo.ts            # useMutation: 할일 수정 (Optimistic Update 적용)
@@ -595,7 +580,10 @@ frontend/
 │   │   ├── useDeleteCategory.ts        # useMutation: 카테고리 삭제 (확인 후 실행)
 │   │   ├── useLogin.ts                 # useMutation: 로그인, Access Token Zustand 저장
 │   │   ├── useLogout.ts                # useMutation: 로그아웃, 토큰 초기화
-│   │   └── useProfile.ts               # useQuery: 내 정보 조회
+│   │   ├── useProfile.ts               # useQuery: 내 정보 조회
+│   │   ├── useUpdateProfile.ts         # useMutation: 이름 수정
+│   │   ├── useUpdatePassword.ts        # useMutation: 비밀번호 변경
+│   │   └── useDeleteAccount.ts         # useMutation: 회원 탈퇴 (2단계 플로우)
 │   │
 │   ├── stores/                         # Zustand 전역 상태 스토어
 │   │   ├── auth.store.ts               # accessToken (메모리), isAuthenticated, setToken, clearToken
@@ -606,7 +594,9 @@ frontend/
 │   │   ├── auth.api.ts                 # /api/auth/* 엔드포인트 호출 함수
 │   │   ├── todo.api.ts                 # /api/todos/* 엔드포인트 호출 함수
 │   │   ├── category.api.ts             # /api/categories/* 엔드포인트 호출 함수
-│   │   └── user.api.ts                 # /api/users/me 엔드포인트 호출 함수
+│   │   ├── user.api.ts                 # /api/users/me 엔드포인트 호출 함수
+│   │   ├── mappers.ts                  # API 응답(snake_case) → 프론트엔드 타입(camelCase) 변환
+│   │   └── queryKeys.ts                # TanStack Query 키 팩토리 (todoKeys, categoryKeys 등)
 │   │
 │   ├── types/                          # 공유 TypeScript 타입 정의
 │   │   ├── todo.types.ts               # Todo, CreateTodoRequest, UpdateTodoRequest, TodoFilter
@@ -615,19 +605,50 @@ frontend/
 │   │   └── user.types.ts               # User, UpdateUserRequest
 │   │
 │   └── utils/
-│       ├── dateUtils.ts                # Overdue 판단 로직 (클라이언트 로컬 타임존 기준, NFR-07)
-│       ├── tokenUtils.ts               # Access Token 만료 여부 확인 유틸
-│       └── validationUtils.ts          # 공통 폼 유효성 검증 함수 (날짜 범위, 비밀번호 형식 등)
+│       └── dateUtils.ts                # Overdue 판단 로직 (클라이언트 로컬 타임존 기준, NFR-07)
+│
+├── src/test/                           # Vitest + React Testing Library 단위·컴포넌트 테스트
+│   ├── setup.ts                        # Vitest 전역 설정 (MSW, jsdom 초기화)
+│   ├── mocks/
+│   │   ├── handlers.ts                 # MSW API 핸들러 (전 엔드포인트 모킹)
+│   │   └── server.ts                   # MSW 서버 인스턴스
+│   ├── components/                     # 공통 UI 컴포넌트 테스트
+│   │   ├── Button.test.tsx
+│   │   ├── Input.test.tsx
+│   │   ├── Modal.test.tsx
+│   │   ├── Badge.test.tsx
+│   │   ├── Spinner.test.tsx
+│   │   ├── Layout.test.tsx
+│   │   └── ToastContainer.test.tsx
+│   ├── features/                       # Feature 컴포넌트 테스트
+│   │   ├── auth/LoginForm.test.tsx
+│   │   ├── auth/SignupForm.test.tsx
+│   │   ├── todo/TodoItem.test.tsx
+│   │   ├── todo/TodoList.test.tsx
+│   │   ├── todo/TodoForm.test.tsx
+│   │   ├── todo/TodoFilter.test.tsx
+│   │   ├── category/CategoryList.test.tsx
+│   │   ├── category/CategoryForm.test.tsx
+│   │   ├── profile/ProfileForm.test.tsx
+│   │   ├── profile/PasswordForm.test.tsx
+│   │   └── profile/DeleteAccountSection.test.tsx
+│   ├── hooks/                          # 커스텀 훅 테스트
+│   │   ├── useAuthInitializer.test.tsx
+│   │   ├── useTodos.test.tsx
+│   │   └── ...
+│   ├── routing/                        # PrivateRoute / PublicRoute 테스트
+│   ├── stores/                         # Zustand store 테스트
+│   └── utils/
+│       └── dateUtils.test.ts           # isOverdue 경계값 테스트
 │
 ├── tests/
-│   ├── components/                     # 컴포넌트 단위 테스트 (Vitest + React Testing Library)
-│   │   ├── TodoItem.test.tsx           # 완료 토글, 삭제 버튼 인터랙션 검증
-│   │   ├── LoginForm.test.tsx          # 폼 유효성 검증, 제출 동작 검증
-│   │   └── CategoryList.test.tsx       # 기본 카테고리 삭제 버튼 비활성화 검증
 │   └── e2e/                            # E2E 테스트 (Playwright)
+│       ├── global.setup.ts             # 테스트 전 사용자 사전 생성 (Rate Limit 대응)
 │       ├── auth.spec.ts                # SCN-01, SCN-03, SCN-17 전체 흐름 검증
 │       ├── todo.spec.ts                # SCN-07 (할일 등록), SCN-10 (완료 토글) 검증
-│       └── category.spec.ts            # SCN-15 (카테고리 삭제 및 할일 재배정) 검증
+│       ├── category.spec.ts            # SCN-15 (카테고리 삭제 및 할일 재배정) 검증
+│       ├── helpers/auth.ts             # loginAs, signupAndLogin 재사용 헬퍼
+│       └── .auth/                      # 테스트 사용자 storageState (Git 제외)
 │
 ├── public/
 │   └── favicon.ico
@@ -651,3 +672,4 @@ frontend/
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |------|------|--------|---------|
 | 0.1.0-draft | 2026-05-13 | MinYoung | 최초 작성 (도메인 정의서 v0.1.0-draft, PRD v0.2.0-draft, 사용자 시나리오 v0.1.0-draft 기반) |
+| 0.2.0 | 2026-05-15 | MinYoung | §6.2 프론트엔드 디렉토리 구조를 실제 구현에 맞게 업데이트 — 추가 hooks(useAuthInitializer, useUpdateProfile, useUpdatePassword, useDeleteAccount), components(ToastContainer), api(mappers.ts, queryKeys.ts), 테스트 구조(src/test/ + tests/e2e/) 반영, 존재하지 않는 tokenUtils.ts·validationUtils.ts 삭제 |
