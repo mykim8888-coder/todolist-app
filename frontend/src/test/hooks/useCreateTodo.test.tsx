@@ -1,27 +1,12 @@
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import React from 'react'
 import { server } from '../mocks/server'
-import { BASE_URL, mockTodoRaw } from '../mocks/handlers'
+import { BASE_URL } from '../mocks/handlers'
 import { useCreateTodo } from '@/hooks/useCreateTodo'
 import { useUiStore } from '@/stores/ui.store'
-import { todoKeys } from '@/api/queryKeys'
-import type { Todo } from '@/types/todo.types'
-
-const mockTodo: Todo = {
-  id: 'todo-uuid',
-  userId: 'user-uuid',
-  categoryId: 'cat-uuid',
-  title: '테스트 할일',
-  description: null,
-  startDate: null,
-  dueDate: '2026-05-14',
-  isCompleted: false,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-}
 
 function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } })

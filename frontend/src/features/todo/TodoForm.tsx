@@ -2,7 +2,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { useCreateTodo } from '@/hooks/useCreateTodo'
@@ -32,7 +31,7 @@ const todoSchema = z
 type TodoFormData = z.infer<typeof todoSchema>
 
 interface TodoFormProps {
-  todo?: Todo
+  todo?: Todo | undefined
   onSuccess?: () => void
 }
 
@@ -61,8 +60,6 @@ export default function TodoForm({ todo, onSuccess }: TodoFormProps) {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
-    watch,
   } = useForm<TodoFormData>({
     resolver: zodResolver(todoSchema),
     defaultValues: {

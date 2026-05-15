@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { getMe } from '@/api/user.api'
 import { useAuthStore } from '@/stores/auth.store'
 
 export function useAuthInitializer() {
   const [isInitializing, setIsInitializing] = useState(true)
-  const navigate = useNavigate()
 
   useEffect(() => {
     getMe()
