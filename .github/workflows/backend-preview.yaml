@@ -1,0 +1,43 @@
+name: Backend Preview
+on:
+push:
+branches: [preview]
+paths:
+-"backend/**"
+pull_request:
+branches: [main]
+paths:
+-"backend/**"
+jobs:
+test:
+runs-on: ubuntu-latest
+strategy:
+matrix:
+node-version: [22.x]
+steps:
+-name: Checkout code
+uses: actions/checkout@v4
+-name: Setup Node.js ${{ matrix.node-version }}
+uses: actions/setup-node@v4
+with:
+node-version: ${{ matrix.node-version }}
+cache: "npm"
+-name: Install dependencies
+working-directory: ./backend
+run: npmci
+-name: Run tests
+working-directory: ./backend
+run: npmrun test
+# test job이 완료되어야 deploy 가 진행
+deploy:
+needs: test
+runs-on: ubuntu-latest
+steps:
+-name: Checkout code
+uses: actions/checkout@v4
+-name: Deploy to Vercel
+uses: amondnet/vercel-action@v25
+with:
+vercel-token: ${{ secrets.VERCEL_TOKEN}}
+vercel-org-id: ${{ secrets.VERCEL_ORG_ID}}
+vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID_BACKEND}}
