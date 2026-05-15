@@ -1,0 +1,61 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - link "TodoApp" [ref=e9] [cursor=pointer]:
+            - /url: /
+          - navigation "메인 네비게이션" [ref=e10]:
+            - link "할일목록" [ref=e11] [cursor=pointer]:
+              - /url: /
+            - link "카테고리" [ref=e12] [cursor=pointer]:
+              - /url: /categories
+            - link "내정보" [ref=e13] [cursor=pointer]:
+              - /url: /profile
+        - generic [ref=e14]:
+          - generic [ref=e15]: 김민영
+          - button "로그아웃" [ref=e16]
+    - main [ref=e18]:
+      - generic [ref=e19]:
+        - heading "카테고리 관리" [level=1] [ref=e20]
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - textbox "새 카테고리 이름" [ref=e25]
+            - button "추가" [ref=e26]:
+              - img [ref=e27]
+              - text: 추가
+          - list [ref=e28]:
+            - listitem [ref=e29]:
+              - generic [ref=e30]:
+                - generic [ref=e31]: 개인
+                - generic [ref=e32]: 기본
+              - button "개인 삭제" [disabled] [ref=e33]:
+                - img [ref=e34]
+            - listitem [ref=e37]:
+              - generic [ref=e38]:
+                - generic [ref=e39]: 업무
+                - generic [ref=e40]: 기본
+              - button "업무 삭제" [disabled] [ref=e41]:
+                - img [ref=e42]
+            - listitem [ref=e45]:
+              - generic [ref=e46]:
+                - generic [ref=e47]: 일반
+                - generic [ref=e48]: 기본
+              - button "일반 삭제" [disabled] [ref=e49]:
+                - img [ref=e50]
+            - listitem [ref=e53]:
+              - generic [ref=e55]: 사이드프로젝트
+              - button "사이드프로젝트 삭제" [ref=e56]:
+                - img [ref=e57]
+  - dialog "카테고리 삭제" [ref=e61]:
+    - generic [ref=e62]:
+      - heading "카테고리 삭제" [level=2] [ref=e63]
+      - button "닫기" [active] [ref=e64]:
+        - img [ref=e65]
+    - paragraph [ref=e68]:
+      - strong [ref=e69]: 사이드프로젝트
+      - text: 카테고리를 삭제하시겠습니까?
+    - paragraph [ref=e70]: 소속 할일은 기본 카테고리로 이동됩니다.
+    - generic [ref=e71]:
+      - button "취소" [ref=e72]
+      - button "삭제" [ref=e73]

@@ -1,0 +1,46 @@
+- generic [ref=e32]:
+  - banner [ref=e33]:
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - link "TodoApp" [ref=e36] [cursor=pointer]:
+          - /url: /
+        - navigation "메인 네비게이션" [ref=e37]:
+          - link "할일목록" [ref=e38] [cursor=pointer]:
+            - /url: /
+          - link "카테고리" [ref=e39] [cursor=pointer]:
+            - /url: /categories
+          - link "내정보" [ref=e40] [cursor=pointer]:
+            - /url: /profile
+      - generic [ref=e41]:
+        - generic [ref=e42]: 김민영
+        - button "로그아웃" [ref=e43]
+  - main [ref=e45]:
+    - generic [ref=e46]:
+      - button "← 할일 목록으로 돌아가기" [ref=e48]
+      - heading "새 할일 등록" [level=1] [ref=e49]
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - generic [ref=e53]: 제목 *
+          - textbox "제목 *" [ref=e55]:
+            - /placeholder: 할일 제목을 입력하세요
+        - generic [ref=e56]:
+          - generic [ref=e57]: 카테고리 *
+          - combobox "카테고리 *" [ref=e58]:
+            - option "카테고리 선택" [selected]
+            - option "개인"
+            - option "업무"
+            - option "일반"
+        - generic [ref=e59]:
+          - text: 설명
+          - textbox "설명" [ref=e60]:
+            - /placeholder: 설명을 입력하세요 (선택사항)
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - text: 시작일
+            - textbox "시작일" [ref=e64]
+          - generic [ref=e65]:
+            - text: 종료 예정일
+            - textbox "종료 예정일" [ref=e67]
+        - generic [ref=e68]:
+          - button "취소" [ref=e69]
+          - button "저장하기" [ref=e70]

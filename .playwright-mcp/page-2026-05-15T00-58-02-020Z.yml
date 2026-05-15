@@ -1,0 +1,24 @@
+- generic [ref=e94]:
+  - heading "회원가입" [level=1] [ref=e95]
+  - generic [ref=e96]:
+    - generic [ref=e97]:
+      - generic [ref=e98]: 이름
+      - textbox "이름" [ref=e99]:
+        - /placeholder: 이름을 입력해주세요
+    - generic [ref=e100]:
+      - generic [ref=e101]: 이메일
+      - textbox "이메일" [ref=e102]:
+        - /placeholder: 이메일을 입력해주세요
+    - generic [ref=e103]:
+      - generic [ref=e104]: 비밀번호
+      - textbox "비밀번호" [ref=e105]:
+        - /placeholder: 영문, 숫자 포함 8자 이상
+    - generic [ref=e106]:
+      - generic [ref=e107]: 비밀번호 확인
+      - textbox "비밀번호 확인" [ref=e108]:
+        - /placeholder: 비밀번호를 다시 입력해주세요
+    - button "회원가입" [ref=e109]
+    - paragraph [ref=e110]:
+      - text: 이미 계정이 있으신가요?
+      - link "로그인" [ref=e111] [cursor=pointer]:
+        - /url: /login

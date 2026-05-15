@@ -1,0 +1,11 @@
+{
+  "root": true,
+  "extends": ["eslint:recommended"],
+  "rules": {
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
+  },
+  "env": {
+    "node": true,
+    "es2022": true
+  }
+}

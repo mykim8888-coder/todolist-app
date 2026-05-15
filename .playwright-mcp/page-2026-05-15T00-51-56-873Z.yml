@@ -1,0 +1,55 @@
+- generic [active] [ref=e3]:
+  - generic [ref=e71]:
+    - banner [ref=e72]:
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - link "TodoApp" [ref=e75] [cursor=pointer]:
+            - /url: /
+          - navigation "메인 네비게이션" [ref=e76]:
+            - link "할일목록" [ref=e77] [cursor=pointer]:
+              - /url: /
+            - link "카테고리" [ref=e78] [cursor=pointer]:
+              - /url: /categories
+            - link "내정보" [ref=e79] [cursor=pointer]:
+              - /url: /profile
+        - generic [ref=e80]:
+          - generic [ref=e81]: 김민영
+          - button "로그아웃" [ref=e82]
+    - main [ref=e84]:
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - heading "할일 목록" [level=1] [ref=e87]
+          - link "새 할일" [ref=e88] [cursor=pointer]:
+            - /url: /todos/new
+            - img [ref=e89]
+            - text: 새 할일
+        - generic [ref=e90]:
+          - combobox "카테고리 필터" [ref=e91]:
+            - option "전체 카테고리" [selected]
+            - option "개인"
+            - option "업무"
+            - option "일반"
+          - generic [ref=e92] [cursor=pointer]:
+            - checkbox "완료된 항목" [ref=e93]
+            - text: 완료된 항목
+          - generic [ref=e94] [cursor=pointer]:
+            - checkbox "기간 만료" [ref=e95]
+            - text: 기간 만료
+        - list "할일 목록" [ref=e96]:
+          - listitem [ref=e97]:
+            - checkbox "할일 완료 토글" [ref=e98]
+            - generic [ref=e99]:
+              - paragraph [ref=e100]: 디자인 시안 v1 제출
+              - generic [ref=e101]:
+                - generic [ref=e102]: 2026-05-15T15:00:00.000Z
+                - generic [ref=e103]: 업무
+            - generic [ref=e104]:
+              - button "디자인 시안 v1 제출 수정" [ref=e105]:
+                - img [ref=e106]
+              - button "디자인 시안 v1 제출 삭제" [ref=e109]:
+                - img [ref=e110]
+  - alert [ref=e114]:
+    - img [ref=e115]
+    - paragraph [ref=e118]: 할일이 등록되었습니다.
+    - button "닫기" [ref=e119]:
+      - img [ref=e120]

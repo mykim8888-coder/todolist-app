@@ -1,0 +1,68 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - link "TodoApp" [ref=e9] [cursor=pointer]:
+            - /url: /
+          - navigation "메인 네비게이션" [ref=e10]:
+            - link "할일목록" [ref=e11] [cursor=pointer]:
+              - /url: /
+            - link "카테고리" [ref=e12] [cursor=pointer]:
+              - /url: /categories
+            - link "내정보" [ref=e13] [cursor=pointer]:
+              - /url: /profile
+        - generic [ref=e14]:
+          - generic [ref=e15]: 박민영
+          - button "로그아웃" [ref=e16]
+    - main [ref=e18]:
+      - generic [ref=e19]:
+        - heading "내 정보 수정" [level=1] [ref=e20]
+        - paragraph [ref=e21]: scntest1@example.com
+        - generic [ref=e22]:
+          - heading "이름 수정" [level=2] [ref=e23]
+          - generic [ref=e24]:
+            - generic [ref=e25]:
+              - generic [ref=e26]: 이름
+              - textbox "이름" [ref=e27]:
+                - /placeholder: 이름을 입력해주세요
+                - text: 박민영
+            - button "이름 저장" [ref=e28]
+        - separator [ref=e29]
+        - generic [ref=e30]:
+          - heading "비밀번호 변경" [level=2] [ref=e31]
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - generic [ref=e34]: 현재 비밀번호
+              - textbox "현재 비밀번호" [ref=e35]:
+                - /placeholder: 현재 비밀번호를 입력해주세요
+            - generic [ref=e36]:
+              - generic [ref=e37]: 새 비밀번호
+              - textbox "새 비밀번호" [ref=e38]:
+                - /placeholder: 영문, 숫자 포함 8자 이상
+            - generic [ref=e39]:
+              - generic [ref=e40]: 새 비밀번호 확인
+              - textbox "새 비밀번호 확인" [ref=e41]:
+                - /placeholder: 새 비밀번호를 다시 입력해주세요
+            - button "비밀번호 변경" [ref=e42]
+        - separator [ref=e43]
+        - generic [ref=e45]:
+          - heading "위험 영역" [level=2] [ref=e46]
+          - separator [ref=e47]
+          - generic [ref=e48]:
+            - paragraph [ref=e49]: 계정을 탈퇴하면 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
+            - button "회원 탈퇴" [ref=e50]
+  - dialog "회원 탈퇴 확인 (1/2)" [ref=e52]:
+    - generic [ref=e53]:
+      - heading "회원 탈퇴 확인 (1/2)" [level=2] [ref=e54]
+      - button "닫기" [active] [ref=e55]:
+        - img [ref=e56]
+    - generic [ref=e59]:
+      - paragraph [ref=e60]: 본인 확인을 위해 현재 비밀번호를 입력해 주세요.
+      - generic [ref=e61]:
+        - generic [ref=e62]: 현재 비밀번호
+        - textbox "현재 비밀번호" [ref=e63]:
+          - /placeholder: 비밀번호를 입력해주세요
+      - generic [ref=e64]:
+        - button "취소" [ref=e65]
+        - button "다음 단계 →" [ref=e66]

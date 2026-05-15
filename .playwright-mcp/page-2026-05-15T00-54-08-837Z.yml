@@ -1,0 +1,43 @@
+- generic [active] [ref=e3]:
+  - generic [ref=e86]:
+    - banner [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - link "TodoApp" [ref=e90] [cursor=pointer]:
+            - /url: /
+          - navigation "메인 네비게이션" [ref=e91]:
+            - link "할일목록" [ref=e92] [cursor=pointer]:
+              - /url: /
+            - link "카테고리" [ref=e93] [cursor=pointer]:
+              - /url: /categories
+            - link "내정보" [ref=e94] [cursor=pointer]:
+              - /url: /profile
+        - generic [ref=e95]:
+          - generic [ref=e96]: 김민영
+          - button "로그아웃" [ref=e97]
+    - main [ref=e99]:
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - heading "할일 목록" [level=1] [ref=e102]
+          - link "새 할일" [ref=e103] [cursor=pointer]:
+            - /url: /todos/new
+            - img [ref=e104]
+            - text: 새 할일
+        - generic [ref=e105]:
+          - combobox "카테고리 필터" [ref=e106]:
+            - option "전체 카테고리" [selected]
+            - option "개인"
+            - option "업무"
+            - option "일반"
+          - generic [ref=e107] [cursor=pointer]:
+            - checkbox "완료된 항목" [ref=e108]
+            - text: 완료된 항목
+          - generic [ref=e109] [cursor=pointer]:
+            - checkbox "기간 만료" [ref=e110]
+            - text: 기간 만료
+        - paragraph [ref=e154]: 할일이 없습니다.
+  - alert [ref=e156]:
+    - img [ref=e157]
+    - paragraph [ref=e160]: 할일이 삭제되었습니다.
+    - button "닫기" [ref=e161]:
+      - img [ref=e162]

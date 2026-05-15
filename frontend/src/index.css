@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+@theme {
+  --font-family-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --color-primary-50: #f5f3ff;
+  --color-primary-100: #ede9fe;
+  --color-primary-200: #ddd6fe;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
+  --color-primary-700: #6d28d9;
+
+  --breakpoint-sm: 360px;
+  --breakpoint-md: 768px;
+  --breakpoint-xl: 1280px;
+
+  --max-width-content: 800px;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply text-gray-900 bg-white text-[15px] leading-relaxed;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-violet-500 ring-offset-2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           h-10 px-4 rounded-lg text-sm font-semibold text-white
+           bg-violet-600 hover:bg-violet-700 active:bg-violet-800
+           transition-colors duration-150
+           disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           h-10 px-4 rounded-lg text-sm font-semibold text-gray-700
+           bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100
+           transition-colors duration-150;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2
+           h-10 px-4 rounded-lg text-sm font-semibold text-red-500
+           bg-white border border-red-200 hover:bg-red-50 hover:border-red-300
+           transition-colors duration-150;
+  }
+
+  .input-field {
+    @apply w-full h-10 px-3 rounded-lg text-sm text-gray-900
+           bg-white border border-gray-200
+           placeholder:text-gray-400
+           focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:border-violet-500
+           transition-colors duration-150;
+  }
+
+  .input-error {
+    @apply border-red-400 focus-visible:ring-red-200 focus-visible:border-red-400;
+  }
+}

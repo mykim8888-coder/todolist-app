@@ -1,0 +1,24 @@
+- generic [active] [ref=e3]:
+  - generic [ref=e72]:
+    - heading "로그인" [level=1] [ref=e73]
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e76]: 이메일
+        - textbox "이메일" [ref=e77]:
+          - /placeholder: 이메일을 입력해주세요
+          - text: scntest1@example.com
+      - generic [ref=e78]:
+        - generic [ref=e79]: 비밀번호
+        - textbox "비밀번호" [ref=e80]:
+          - /placeholder: 비밀번호를 입력해주세요
+          - text: WrongPass999
+      - button "로그인" [ref=e81]
+      - paragraph [ref=e82]:
+        - text: 계정이 없으신가요?
+        - link "회원가입" [ref=e83] [cursor=pointer]:
+          - /url: /signup
+  - alert [ref=e85]:
+    - img [ref=e86]
+    - paragraph [ref=e88]: 이메일 또는 비밀번호가 올바르지 않습니다
+    - button "닫기" [ref=e89]:
+      - img [ref=e90]
